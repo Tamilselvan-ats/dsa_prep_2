@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Play, RotateCcw, StepForward, Pause, Plus, Minus, Eye,
@@ -33,7 +33,17 @@ export default function StackVisualizerPage() {
   const [isAnimating, setIsAnimating] = useState(false);
   const [highlightTop, setHighlightTop] = useState(false);
   const [idCounter, setIdCounter] = useState(0);
-  const { addXP } = useProgressStore();
+  const { addXP, updateTopicMastery, recordStudySession } = useProgressStore();
+  const masteryUpdated = useRef(false);
+
+  // Track study time
+  useEffect(() => {
+    const start = Date.now();
+    return () => {
+      const mins = Math.round((Date.now() - start) / 60000);
+      if (mins >= 1) recordStudySession(mins);
+    };
+  }, []);
 
   const addHistory = (op: string, val: any, result: string) => {
     setHistory(prev => [{ operation: op, value: val, result, timestamp: new Date() }, ...prev.slice(0, 19)]);
@@ -59,6 +69,16 @@ export default function StackVisualizerPage() {
     setInputValue("");
     addHistory("PUSH", val, `${val} pushed onto stack`);
     addXP(2);
+    // Update mastery once per session on first successful push
+    if (!masteryUpdated.current) {
+      masteryUpdated.current = true;
+      updateTopicMastery("stack-adt", {
+        masteryScore: 15,
+        practiceScore: 10,
+        lastStudiedAt: new Date().toISOString(),
+        nextRevisionAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+      });
+    }
     toast.success(`Pushed ${val} → stack`, { icon: "📥" });
   };
 

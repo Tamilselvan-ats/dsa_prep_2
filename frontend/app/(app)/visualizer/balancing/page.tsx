@@ -78,7 +78,17 @@ export default function BalancingCheckerPage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [speed, setSpeed] = useState(600);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const { addXP } = useProgressStore();
+  const { addXP, updateTopicMastery, recordStudySession } = useProgressStore();
+  const masteryUpdated = useRef(false);
+
+  // Track study time
+  useEffect(() => {
+    const start = Date.now();
+    return () => {
+      const mins = Math.round((Date.now() - start) / 60000);
+      if (mins >= 1) recordStudySession(mins);
+    };
+  }, []);
 
   const runCheck = useCallback(() => {
     const result = checkBalancing(input);
@@ -87,6 +97,16 @@ export default function BalancingCheckerPage() {
     setErrorIndex(-1);
     setCurrentStep(-1);
     addXP(3);
+    // Update mastery once per session on first check
+    if (!masteryUpdated.current) {
+      masteryUpdated.current = true;
+      updateTopicMastery("balancing-symbols", {
+        masteryScore: 15,
+        practiceScore: 10,
+        lastStudiedAt: new Date().toISOString(),
+        nextRevisionAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+      });
+    }
   }, [input, addXP]);
 
   const stepForward = useCallback(() => {
