@@ -24,6 +24,7 @@ const NAV_ITEMS = [
       { href: "/tutor/viva", label: "Viva Trainer", icon: GraduationCap },
       { href: "/tutor/algorithm", label: "Algorithm Lab", icon: Cpu },
       { href: "/tutor/code-analyzer", label: "Code Analyzer", icon: Code },
+      { href: "/tutor/pseudocode", label: "Pseudocode Tutor", icon: FlaskConical },
     ],
   },
   {
@@ -60,6 +61,15 @@ const NAV_ITEMS = [
   { href: "/exam/paper-generator", icon: GraduationCap, label: "Paper Generator", color: "text-orange-400" },
   { href: "/challenge", icon: Flame, label: "Daily Challenge", color: "text-yellow-400" },
   { href: "/analytics", icon: BarChart3, label: "Analytics", color: "text-pink-400" },
+  {
+    label: "Progress",
+    icon: Trophy,
+    color: "text-yellow-400",
+    children: [
+      { href: "/dashboard/achievements", label: "Achievements 🏆", icon: Trophy },
+      { href: "/dashboard/revision", label: "Spaced Revision 📅", icon: BarChart3 },
+    ],
+  },
   { href: "/settings", icon: Settings, label: "AI Settings", color: "text-slate-400" },
 ];
 
