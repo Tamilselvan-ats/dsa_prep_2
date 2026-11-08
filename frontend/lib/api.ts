@@ -151,7 +151,91 @@ export async function generateExamPaper(params: {
   return data.paper;
 }
 
-// Direct Gemini API call for client-side use (when backend is not available)
+// ─── Exam APIs ───────────────────────────────────────────────────────────────
+
+export async function createExam(params: {
+  title: string;
+  topic: string;
+  duration: number;
+  questions: Array<{
+    id: string;
+    text: string;
+    options?: string[];
+    correctAnswer?: string | number;
+    marks: number;
+    topic: string;
+    type: 'mcq' | 'short' | 'long';
+  }>;
+  userId?: string;
+}) {
+  const response = await fetch(`${API_BASE}/api/exam/create`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  if (!response.ok) throw new Error('Failed to create exam');
+  return response.json();
+}
+
+export async function submitExam(examId: string, answers: Record<string, string | number>, timeSpent?: number) {
+  const response = await fetch(`${API_BASE}/api/exam/${examId}/submit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ answers, timeSpent }),
+  });
+  if (!response.ok) throw new Error('Failed to submit exam');
+  return response.json();
+}
+
+// ─── Analytics APIs ───────────────────────────────────────────────────────────
+
+export async function getAnalyticsPrediction(userId: string, progress: object) {
+  const response = await fetch(`${API_BASE}/api/analytics/${userId}/predict`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ progress }),
+  });
+  if (!response.ok) throw new Error('Failed to get analytics prediction');
+  return response.json();
+}
+
+export async function logAnalyticsEvent(params: {
+  userId: string;
+  event: string;
+  topic?: string;
+  score?: number;
+  duration?: number;
+  metadata?: Record<string, unknown>;
+}) {
+  try {
+    await fetch(`${API_BASE}/api/analytics/event`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+  } catch {
+    // Fire-and-forget — don't throw on analytics failure
+  }
+}
+
+// ─── Progress APIs ────────────────────────────────────────────────────────────
+
+export async function syncProgress(userId: string, progress: object) {
+  try {
+    const response = await fetch(`${API_BASE}/api/progress/update`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, progress }),
+    });
+    if (!response.ok) return null;
+    return response.json();
+  } catch {
+    return null; // Non-critical — Zustand persist is source of truth
+  }
+}
+
+// ─── Direct Gemini API call for client-side use (when backend is not available)
+
 export async function callGeminiDirect(
   prompt: string,
   systemPrompt: string,

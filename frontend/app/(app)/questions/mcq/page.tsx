@@ -240,7 +240,7 @@ export default function MCQPage() {
               </div>
             </div>
 
-            <button onClick={handleGenerate} disabled={state === "loading"}
+            <button onClick={handleGenerate} disabled={false}
               className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold hover:from-indigo-500 hover:to-purple-500 transition-all disabled:opacity-50"
             >
               <Zap className="w-4 h-4" /> Generate MCQs

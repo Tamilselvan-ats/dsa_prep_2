@@ -76,7 +76,7 @@ function getGradeFromPct(pct: number): { grade: string; color: string; msg: stri
 
 function formatModelAnswer(ma: LongModelAnswer | string): React.ReactNode {
   if (typeof ma === "string") {
-    return <ReactMarkdown className="text-sm text-slate-300 leading-relaxed">{ma}</ReactMarkdown>;
+    return <div className="text-sm text-slate-300 leading-relaxed prose prose-invert prose-sm max-w-none"><ReactMarkdown>{ma}</ReactMarkdown></div>;
   }
 
   const sections: { key: string; label: string; icon: string; content: string }[] = [
@@ -90,7 +90,7 @@ function formatModelAnswer(ma: LongModelAnswer | string): React.ReactNode {
   ].filter(s => s.content.trim());
 
   if (sections.length === 0 && ma.raw) {
-    return <ReactMarkdown className="text-sm text-slate-300 leading-relaxed">{ma.raw}</ReactMarkdown>;
+    return <div className="text-sm text-slate-300 leading-relaxed prose prose-invert prose-sm max-w-none"><ReactMarkdown>{ma.raw}</ReactMarkdown></div>;
   }
 
   return (

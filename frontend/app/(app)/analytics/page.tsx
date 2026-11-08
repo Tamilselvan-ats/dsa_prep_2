@@ -4,15 +4,18 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import {
   BarChart3, TrendingUp, Calendar, Target, Flame, Trophy,
-  BookOpen, CheckCircle, AlertCircle, ArrowRight, Zap, Brain
+  BookOpen, CheckCircle, AlertCircle, ArrowRight, Zap, Brain,
+  Clock, RefreshCcw, GraduationCap, Layers
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  LineChart, Line, CartesianGrid, Legend, Cell
+  RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
+  CartesianGrid, Legend, Cell
 } from "recharts";
 import { useProgressStore } from "@/lib/stores/progress-store";
-import { DSA_TOPICS, ALL_TOPICS, RANK_INFO } from "@/lib/constants";
+import { ALL_TOPICS, RANK_INFO } from "@/lib/constants";
 import Link from "next/link";
+import { getAnalyticsPrediction } from "@/lib/api";
 
 // ─── Heatmap ──────────────────────────────────────────────────────────────────
 function StudyHeatmap({ studyDays }: { studyDays: Record<string, number> }) {
@@ -73,6 +76,8 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 export default function AnalyticsPage() {
   const { progress } = useProgressStore();
   const rankInfo = RANK_INFO[progress.rank];
+  const [backendPrediction, setBackendPrediction] = useState<any>(null);
+  const [predicting, setPredicting] = useState(false);
 
   // Build mastery chart data
   const masteryData = ALL_TOPICS.slice(0, 10).map(t => ({
@@ -80,6 +85,18 @@ export default function AnalyticsPage() {
     fullName: t.name,
     mastery: progress.topicMastery[t.id]?.masteryScore || 0,
     practice: progress.topicMastery[t.id]?.practiceScore || 0,
+  }));
+
+  // Radar chart data (top 6 topics for radar)
+  const radarData = ALL_TOPICS.slice(0, 6).map(t => ({
+    topic: t.name.split(" ")[0],
+    mastery: progress.topicMastery[t.id]?.masteryScore || 0,
+  }));
+
+  // Radar chart data (top 6 topics for radar)
+  const radarData = ALL_TOPICS.slice(0, 6).map(t => ({
+    topic: t.name.split(" ")[0],
+    mastery: progress.topicMastery[t.id]?.masteryScore || 0,
   }));
 
   // Weekly XP trend (simulated from study days)
@@ -112,10 +129,51 @@ export default function AnalyticsPage() {
   const masteredCount = Object.values(progress.topicMastery).filter(t => t.masteryScore >= 80).length;
   const totalTopics = ALL_TOPICS.length;
 
-  // Predicted CT score (naive formula)
+  // Client-side CT score prediction
   const predictedScore = Math.min(50, Math.round(
     (accuracy * 0.3) + (masteredCount / totalTopics * 50 * 0.4) + (Math.min(progress.streak, 30) / 30 * 50 * 0.3)
   ));
+
+  // Topics due for revision (SM-2 based)
+  const topicsDueForRevision = ALL_TOPICS
+    .map(t => {
+      const m = progress.topicMastery[t.id];
+      const nextDate = m?.nextRevisionAt;
+      if (!nextDate) return null;
+      const daysOverdue = Math.floor((Date.now() - new Date(nextDate).getTime()) / (1000 * 60 * 60 * 24));
+      return daysOverdue >= 0 ? { ...t, daysOverdue, masteryScore: m.masteryScore } : null;
+    })
+    .filter(Boolean)
+    .sort((a: any, b: any) => b.daysOverdue - a.daysOverdue)
+    .slice(0, 5) as Array<{ id: string; name: string; slug: string; daysOverdue: number; masteryScore: number }>;
+
+  // Fetch backend CT prediction
+  const fetchBackendPrediction = async () => {
+    setPredicting(true);
+    try {
+      const result = await getAnalyticsPrediction("local-user", progress);
+      setBackendPrediction(result);
+    } catch {
+      // Backend not running — use client-side prediction
+    } finally {
+      setPredicting(false);
+    }
+  };
+
+  const displayPrediction = backendPrediction?.prediction || {
+    predicted: predictedScore,
+    maxScore: 50,
+    grade: predictedScore >= 45 ? "O" : predictedScore >= 40 ? "A+" : predictedScore >= 30 ? "A" : predictedScore >= 20 ? "B" : "C",
+    recommendation: predictedScore >= 40
+      ? "Excellent prep! Keep maintaining your practice."
+      : "Focus on weaker topics and increase daily practice.",
+    breakdown: {
+      accuracy,
+      avgMastery: Math.round(Object.values(progress.topicMastery).reduce((s, t) => s + t.masteryScore, 0) / Math.max(Object.values(progress.topicMastery).length, 1)),
+      masteredTopics: masteredCount,
+      consistencyScore: Math.round(Math.min(100, (progress.streak / 30) * 100)),
+    },
+  };
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -142,33 +200,113 @@ export default function AnalyticsPage() {
         ))}
       </div>
 
-      {/* CT Score Prediction */}
+      {/* CT Score Prediction — Enhanced */}
       <div className="glass-card p-5 border border-indigo-500/30 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/5 to-purple-500/5" />
-        <div className="relative flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
+        <div className="relative">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
               <Brain className="w-5 h-5 text-indigo-400" />
               <h2 className="font-bold text-white">CT Score Prediction (AI)</h2>
             </div>
-            <p className="text-slate-400 text-sm">Based on your mastery scores, accuracy, and study consistency</p>
+            <button
+              onClick={fetchBackendPrediction}
+              disabled={predicting}
+              className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 disabled:opacity-50"
+            >
+              <RefreshCcw className={`w-3 h-3 ${predicting ? "animate-spin" : ""}`} />
+              {predicting ? "Analyzing..." : "Refresh"}
+            </button>
           </div>
-          <div className="text-center">
-            <div className="text-5xl font-black gradient-text">{predictedScore}/50</div>
-            <div className="text-xs text-slate-400 mt-1">Predicted Score</div>
-          </div>
-          <div className="text-right">
-            <div className={`text-lg font-bold ${predictedScore >= 40 ? "text-green-400" : predictedScore >= 30 ? "text-yellow-400" : "text-red-400"}`}>
-              {predictedScore >= 40 ? "🎯 Excellent" : predictedScore >= 30 ? "📈 On Track" : "⚠️ Needs Work"}
+          <div className="flex items-center justify-between flex-wrap gap-6">
+            {/* Score display */}
+            <div className="text-center">
+              <div className="text-6xl font-black gradient-text">{displayPrediction.predicted}/{displayPrediction.maxScore}</div>
+              <div className="text-sm text-slate-400 mt-1">Predicted Score</div>
+              <div className={`text-xl font-bold mt-2 ${displayPrediction.predicted >= 40 ? "text-green-400" : displayPrediction.predicted >= 30 ? "text-yellow-400" : "text-red-400"}`}>
+                Grade: {displayPrediction.grade}
+              </div>
             </div>
-            <Link href="/questions">
-              <button className="mt-2 text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 ml-auto">
-                Practice more <ArrowRight className="w-3 h-3" />
-              </button>
-            </Link>
+            {/* Breakdown */}
+            <div className="flex-1 min-w-48 space-y-2">
+              {[
+                { label: "Answer Accuracy", value: displayPrediction.breakdown.accuracy, color: "from-cyan-500 to-blue-500" },
+                { label: "Avg Topic Mastery", value: displayPrediction.breakdown.avgMastery, color: "from-purple-500 to-pink-500" },
+                { label: "Topics Mastered", value: Math.round((displayPrediction.breakdown.masteredTopics / totalTopics) * 100), color: "from-green-500 to-emerald-500" },
+                { label: "Study Consistency", value: displayPrediction.breakdown.consistencyScore, color: "from-orange-500 to-amber-500" },
+              ].map((item, i) => (
+                <div key={i}>
+                  <div className="flex justify-between text-xs text-slate-400 mb-1">
+                    <span>{item.label}</span><span className="font-bold text-white">{item.value}%</span>
+                  </div>
+                  <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                    <div className={`h-full bg-gradient-to-r ${item.color} rounded-full transition-all duration-700`}
+                      style={{ width: `${item.value}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Recommendation */}
+            <div className="max-w-xs">
+              <div className="text-xs font-semibold text-indigo-300 mb-1">🎯 AI Recommendation</div>
+              <p className="text-xs text-slate-400 leading-relaxed">{displayPrediction.recommendation}</p>
+              <div className="flex gap-2 mt-3">
+                <Link href="/questions/mcq">
+                  <button className="text-xs bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-3 py-1 rounded-lg hover:bg-indigo-500/30 transition-all">
+                    Practice MCQs
+                  </button>
+                </Link>
+                <Link href="/dashboard/revision">
+                  <button className="text-xs bg-purple-500/20 text-purple-300 border border-purple-500/30 px-3 py-1 rounded-lg hover:bg-purple-500/30 transition-all">
+                    Spaced Revision
+                  </button>
+                </Link>
+              </div>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Topics Due for Revision */}
+      {topicsDueForRevision.length > 0 && (
+        <div className="glass-card p-5 border border-orange-500/20">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Clock className="w-5 h-5 text-orange-400" />
+              <h2 className="font-bold text-white">Topics Due for Revision</h2>
+              <span className="text-xs bg-orange-500/20 text-orange-300 px-2 py-0.5 rounded-full border border-orange-500/30">
+                {topicsDueForRevision.length} due
+              </span>
+            </div>
+            <Link href="/dashboard/revision">
+              <button className="text-xs text-orange-400 hover:text-orange-300 flex items-center gap-1">
+                Start Revision <ArrowRight className="w-3 h-3" />
+              </button>
+            </Link>
+          </div>
+          <div className="space-y-2">
+            {topicsDueForRevision.map((t, i) => (
+              <div key={i} className="flex items-center gap-3 p-2 rounded-lg bg-slate-800/30">
+                <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                  t.daysOverdue > 7 ? "bg-red-500" : t.daysOverdue > 3 ? "bg-orange-500" : "bg-yellow-500"
+                }`} />
+                <div className="flex-1">
+                  <span className="text-sm text-slate-200">{t.name}</span>
+                  <span className="ml-2 text-xs text-slate-500">Mastery: {t.masteryScore}%</span>
+                </div>
+                <span className={`text-xs font-medium ${
+                  t.daysOverdue > 7 ? "text-red-400" : t.daysOverdue > 3 ? "text-orange-400" : "text-yellow-400"
+                }`}>
+                  {t.daysOverdue}d overdue
+                </span>
+                <Link href={`/visualizer/${t.slug}`}>
+                  <button className="text-xs text-indigo-400 hover:text-indigo-300">Review →</button>
+                </Link>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Study Heatmap */}
@@ -306,6 +444,55 @@ export default function AnalyticsPage() {
               </div>
               {progress.rank === rank && <span className="text-xs text-indigo-400 font-bold">← Current</span>}
             </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Skill Radar Chart */}
+      <div className="glass-card p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <Layers className="w-5 h-5 text-purple-400" />
+          <h2 className="font-bold text-white">Skill Radar — Topic Coverage</h2>
+        </div>
+        {Object.keys(progress.topicMastery).length > 0 ? (
+          <ResponsiveContainer width="100%" height={260}>
+            <RadarChart data={radarData}>
+              <PolarGrid stroke="rgba(255,255,255,0.08)" />
+              <PolarAngleAxis dataKey="topic" tick={{ fill: "#94a3b8", fontSize: 11 }} />
+              <PolarRadiusAxis domain={[0, 100]} tick={{ fill: "#64748b", fontSize: 10 }} />
+              <Radar name="Mastery" dataKey="mastery" stroke="#6366f1" fill="#6366f1" fillOpacity={0.25} />
+            </RadarChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="h-40 flex items-center justify-center">
+            <div className="text-center">
+              <GraduationCap className="w-10 h-10 text-slate-600 mx-auto mb-2" />
+              <p className="text-slate-500 text-sm">Start learning to see your skill radar</p>
+              <Link href="/visualizer"><button className="mt-2 text-xs text-indigo-400">Explore Visualizers →</button></Link>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Quick Actions */}
+      <div className="glass-card p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <Zap className="w-5 h-5 text-yellow-400" />
+          <h2 className="font-bold text-white">Quick Actions</h2>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { label: "Practice MCQs", href: "/questions/mcq", icon: Target, color: "text-indigo-400", bg: "bg-indigo-500/10 border-indigo-500/20" },
+            { label: "Long Questions", href: "/questions/long", icon: BookOpen, color: "text-purple-400", bg: "bg-purple-500/10 border-purple-500/20" },
+            { label: "HOTS Questions", href: "/questions/hots", icon: Brain, color: "text-cyan-400", bg: "bg-cyan-500/10 border-cyan-500/20" },
+            { label: "Spaced Revision", href: "/dashboard/revision", icon: RefreshCcw, color: "text-green-400", bg: "bg-green-500/10 border-green-500/20" },
+          ].map((action, i) => (
+            <Link key={i} href={action.href}>
+              <button className={`w-full p-3 rounded-xl border ${action.bg} flex flex-col items-center gap-2 hover:scale-105 transition-transform`}>
+                <action.icon className={`w-5 h-5 ${action.color}`} />
+                <span className="text-xs text-slate-300 text-center">{action.label}</span>
+              </button>
+            </Link>
           ))}
         </div>
       </div>
