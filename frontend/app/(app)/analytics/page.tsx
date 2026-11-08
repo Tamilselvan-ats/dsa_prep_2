@@ -93,12 +93,6 @@ export default function AnalyticsPage() {
     mastery: progress.topicMastery[t.id]?.masteryScore || 0,
   }));
 
-  // Radar chart data (top 6 topics for radar)
-  const radarData = ALL_TOPICS.slice(0, 6).map(t => ({
-    topic: t.name.split(" ")[0],
-    mastery: progress.topicMastery[t.id]?.masteryScore || 0,
-  }));
-
   // Weekly XP trend (simulated from study days)
   const weeklyData = Array.from({ length: 7 }, (_, i) => {
     const d = new Date();

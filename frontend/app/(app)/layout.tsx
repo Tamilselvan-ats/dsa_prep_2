@@ -8,7 +8,7 @@ import {
   Brain, LayoutDashboard, Layers, GitBranch, TreePine, Hash,
   BookOpen, Target, BarChart3, Trophy, Zap, Settings, Menu, X,
   Code, Cpu, GraduationCap, FlaskConical, Star, ChevronDown,
-  Flame, Shield
+  Flame, Shield, Calendar, User
 } from "lucide-react";
 import { useProgressStore } from "@/lib/stores/progress-store";
 import { RANK_INFO } from "@/lib/constants";
@@ -61,6 +61,9 @@ const NAV_ITEMS = [
   { href: "/exam/paper-generator", icon: GraduationCap, label: "Paper Generator", color: "text-orange-400" },
   { href: "/challenge", icon: Flame, label: "Daily Challenge", color: "text-yellow-400" },
   { href: "/analytics", icon: BarChart3, label: "Analytics", color: "text-pink-400" },
+  { href: "/study-plan", icon: Calendar, label: "Study Plan 📅", color: "text-teal-400" },
+  { href: "/leaderboard", icon: Trophy, label: "Leaderboard 🏆", color: "text-yellow-400" },
+  { href: "/profile", icon: User, label: "My Profile", color: "text-slate-300" },
   {
     label: "Progress",
     icon: Trophy,
