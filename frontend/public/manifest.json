@@ -1,0 +1,17 @@
+{
+  "name": "DSA CT Master",
+  "short_name": "DSA CT",
+  "description": "AI-Powered DSA Learning Platform",
+  "theme_color": "#6366f1",
+  "background_color": "#030712",
+  "display": "standalone",
+  "orientation": "portrait",
+  "start_url": "/dashboard",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "any",
+      "type": "image/x-icon"
+    }
+  ]
+}

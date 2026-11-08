@@ -32,7 +32,7 @@ export interface UserProgress {
 
 interface ProgressStore {
   progress: UserProgress;
-  addXP: (amount: number) => void;
+  addXP: (amount: number, reason?: string) => void;
   updateTopicMastery: (topicId: string, update: Partial<TopicMastery>) => void;
   recordStudySession: (minutes: number) => void;
   recordQuestionAttempt: (correct: boolean) => void;
@@ -64,7 +64,7 @@ export const useProgressStore = create<ProgressStore>()(
     (set, get) => ({
       progress: DEFAULT_PROGRESS,
 
-      addXP: (amount) =>
+      addXP: (amount, _reason?) =>
         set((state) => {
           let { xp, level } = state.progress;
           xp += amount;
@@ -83,16 +83,17 @@ export const useProgressStore = create<ProgressStore>()(
             topicMastery: {
               ...state.progress.topicMastery,
               [topicId]: {
-                topicId,
-                learningScore: 0,
-                practiceScore: 0,
-                revisionScore: 0,
-                mockTestScore: 0,
-                confidenceScore: 0,
-                masteryScore: 0,
-                practiceCount: 0,
-                correctCount: 0,
-                ...state.progress.topicMastery[topicId],
+                ...(state.progress.topicMastery[topicId] ?? {
+                  topicId,
+                  learningScore: 0,
+                  practiceScore: 0,
+                  revisionScore: 0,
+                  mockTestScore: 0,
+                  confidenceScore: 0,
+                  masteryScore: 0,
+                  practiceCount: 0,
+                  correctCount: 0,
+                }),
                 ...update,
               },
             },
