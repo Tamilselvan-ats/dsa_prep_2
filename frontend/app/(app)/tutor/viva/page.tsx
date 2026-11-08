@@ -81,7 +81,7 @@ function formatTime(seconds: number): string {
 
 export default function VivaPage() {
   const { settings } = useAIStore();
-  const { addXP } = useProgressStore();
+  const { addXP, updateTopicMastery, recordStudySession } = useProgressStore();
 
   // Phase
   const [phase, setPhase] = useState<VivaPhase>("setup");
@@ -353,7 +353,19 @@ Scoring: Full marks only if answer is complete and accurate. Partial for partial
 
     setPhase("results");
     addXP(percentage >= 75 ? 50 : percentage >= 50 ? 25 : 10, "Viva Session");
-  }, [answers, questions, sessionTimer]);
+    if (sessionTimer > 30) {
+      recordStudySession(Math.max(1, Math.round(sessionTimer / 60)));
+    }
+    // Update mastery for all tested topics
+    selectedTopics.forEach(topicId => {
+      updateTopicMastery(topicId, {
+        masteryScore: Math.min(100, percentage),
+        practiceScore: Math.min(100, percentage),
+        lastStudiedAt: new Date().toISOString(),
+        nextRevisionAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+      });
+    });
+  }, [answers, questions, sessionTimer, selectedTopics, addXP, recordStudySession, updateTopicMastery]);
 
   // ── Reset ──────────────────────────────────────────────────────────────────
 

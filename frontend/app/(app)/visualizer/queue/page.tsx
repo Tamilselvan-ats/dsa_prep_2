@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Play, RotateCcw, Plus, Minus, ArrowLeft, ArrowRight,
@@ -19,7 +19,7 @@ interface LogEntry { op: string; msg: string; time: Date; ok: boolean; }
 let _id = 0;
 const uid = () => ++_id;
 
-type Tab = "linear" | "circular" | "priority" | "deque";
+type Tab = "linear" | "circular" | "priority" | "deque" | "scheduling";
 
 // ─── C Code snippets ─────────────────────────────────────────────────────────
 const C_CODE: Record<Tab, string> = {
@@ -124,6 +124,28 @@ int deleteRear() {
   else rear = (rear - 1 + MAX) % MAX;
   return val;
 }`,
+  scheduling: `// Round Robin CPU Scheduling using FIFO Queue
+struct Process { int id, at, bt, rem, ct, tat, wt; };
+
+void roundRobin(struct Process p[], int n, int quantum) {
+  int queue[100], front = 0, rear = 0, time = 0;
+  for(int i = 0; i < n; i++) queue[rear++] = i; // Enqueue all
+  
+  while(front < rear) {
+    int cur = queue[front++]; // Dequeue
+    int exec = (p[cur].rem > quantum) ? quantum : p[cur].rem;
+    time += exec;
+    p[cur].rem -= exec;
+    
+    if (p[cur].rem > 0) {
+      queue[rear++] = cur; // Preempt and re-enqueue at rear
+    } else {
+      p[cur].ct = time;
+      p[cur].tat = p[cur].ct - p[cur].at;
+      p[cur].wt = p[cur].tat - p[cur].bt;
+    }
+  }
+}`,
 };
 
 const EXAM_TIPS: Record<Tab, string[]> = {
@@ -151,6 +173,13 @@ const EXAM_TIPS: Record<Tab, string[]> = {
     "Input-restricted deque: insert at rear only, delete from both ends.",
     "Output-restricted deque: delete from front only, insert at both ends.",
     "Can implement both Stack (push/pop rear) and Queue (push rear, pop front).",
+  ],
+  scheduling: [
+    "Round Robin is preemptive scheduling governed by a circular FIFO ready queue.",
+    "Time Quantum (q): Too small = high context switch overhead; too large = degrades into FCFS.",
+    "Key Exam Formula 1: Turnaround Time (TAT) = Completion Time (CT) - Arrival Time (AT).",
+    "Key Exam Formula 2: Waiting Time (WT) = Turnaround Time (TAT) - Burst Time (BT).",
+    "Average TAT = Sum(TAT) / n; Average WT = Sum(WT) / n.",
   ],
 };
 
@@ -819,6 +848,351 @@ function Deque({ addXP }: { addXP: (n: number) => void }) {
   );
 }
 
+// ─── Round Robin CPU Scheduler ──────────────────────────────────────────────
+interface RRProcess {
+  id: string;
+  name: string;
+  at: number;
+  bt: number;
+  rem: number;
+  ct: number;
+  tat: number;
+  wt: number;
+  color: string;
+}
+
+interface GanttSlice {
+  pid: string;
+  name: string;
+  start: number;
+  end: number;
+  color: string;
+}
+
+const DEFAULT_RR_PROCS: RRProcess[] = [
+  { id: "1", name: "P1", at: 0, bt: 5, rem: 5, ct: 0, tat: 0, wt: 0, color: "bg-indigo-500" },
+  { id: "2", name: "P2", at: 1, bt: 3, rem: 3, ct: 0, tat: 0, wt: 0, color: "bg-purple-500" },
+  { id: "3", name: "P3", at: 2, bt: 4, rem: 4, ct: 0, tat: 0, wt: 0, color: "bg-cyan-500" },
+  { id: "4", name: "P4", at: 3, bt: 2, rem: 2, ct: 0, tat: 0, wt: 0, color: "bg-emerald-500" },
+];
+
+function RoundRobinScheduler({
+  addXP,
+  updateTopicMastery,
+}: {
+  addXP: (n: number) => void;
+  updateTopicMastery: (id: string, m: any) => void;
+}) {
+  const [quantum, setQuantum] = useState(2);
+  const [processes, setProcesses] = useState<RRProcess[]>(() => JSON.parse(JSON.stringify(DEFAULT_RR_PROCS)));
+  const [time, setTime] = useState(0);
+  const [readyQueue, setReadyQueue] = useState<string[]>(["1"]);
+  const [gantt, setGantt] = useState<GanttSlice[]>([]);
+  const [running, setRunning] = useState<string | null>(null);
+  const [isDone, setIsDone] = useState(false);
+  const [logs, setLogs] = useState<string[]>(["Simulation initialized. P1 arrived at t=0 and joined ready queue."]);
+  const [autoPlay, setAutoPlay] = useState(false);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const reset = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    setAutoPlay(false);
+    setProcesses(JSON.parse(JSON.stringify(DEFAULT_RR_PROCS)));
+    setTime(0);
+    setReadyQueue(["1"]);
+    setGantt([]);
+    setRunning(null);
+    setIsDone(false);
+    setLogs(["Simulation reset. P1 in ready queue."]);
+  };
+
+  const step = useCallback(() => {
+    if (isDone) return;
+
+    // Check if ready queue has any process
+    if (readyQueue.length === 0) {
+      // Find next arriving process
+      const unarrived = processes.filter(p => p.rem > 0 && p.at > time);
+      if (unarrived.length > 0) {
+        const nextP = unarrived.sort((a, b) => a.at - b.at)[0];
+        setTime(nextP.at);
+        setReadyQueue([nextP.id]);
+        setLogs(prev => [`[IDLE] CPU idle until t=${nextP.at}. ${nextP.name} arrived.`, ...prev]);
+        return;
+      }
+      setIsDone(true);
+      setAutoPlay(false);
+      return;
+    }
+
+    const curId = readyQueue[0];
+    const newQueue = readyQueue.slice(1);
+    const proc = processes.find(p => p.id === curId);
+    if (!proc) return;
+
+    const execTime = Math.min(quantum, proc.rem);
+    const startTime = time;
+    const endTime = startTime + execTime;
+    const newRem = proc.rem - execTime;
+
+    setRunning(curId);
+
+    // Enqueue processes that arrive during this time slice
+    const newlyArrived = processes.filter(
+      p => p.id !== curId && p.at > startTime && p.at <= endTime && !newQueue.includes(p.id) && p.rem > 0
+    );
+
+    const queuedAfterArrivals = [...newQueue, ...newlyArrived.map(p => p.id)];
+
+    // If current process still has remaining burst, re-enqueue to rear
+    if (newRem > 0) {
+      queuedAfterArrivals.push(curId);
+    }
+
+    // Update processes state
+    const updatedProcesses = processes.map(p => {
+      if (p.id === curId) {
+        const finished = newRem === 0;
+        const ct = finished ? endTime : p.ct;
+        const tat = finished ? ct - p.at : p.tat;
+        const wt = finished ? tat - p.bt : p.wt;
+        return { ...p, rem: newRem, ct, tat, wt };
+      }
+      return p;
+    });
+
+    setProcesses(updatedProcesses);
+    setTime(endTime);
+    setReadyQueue(queuedAfterArrivals);
+    setGantt(prev => [...prev, { pid: curId, name: proc.name, start: startTime, end: endTime, color: proc.color }]);
+    setLogs(prev => [
+      `[EXEC] ${proc.name} executed from t=${startTime} to t=${endTime} (${execTime} units). ${newRem === 0 ? "✓ Completed!" : `Remaining: ${newRem}`}`,
+      ...prev,
+    ]);
+
+    const allFinished = updatedProcesses.every(p => p.rem === 0);
+    if (allFinished) {
+      setIsDone(true);
+      setAutoPlay(false);
+      setRunning(null);
+      addXP(25);
+      updateTopicMastery("scheduling", {
+        masteryScore: 35,
+        practiceScore: 30,
+        lastStudiedAt: new Date().toISOString(),
+        nextRevisionAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+      });
+      updateTopicMastery("queue-adt", {
+        practiceScore: 25,
+        lastStudiedAt: new Date().toISOString(),
+      });
+      toast.success("Round Robin simulation complete! +25 XP", { icon: "🎉" });
+    }
+  }, [isDone, readyQueue, processes, time, quantum, addXP, updateTopicMastery]);
+
+  useEffect(() => {
+    if (autoPlay && !isDone) {
+      timerRef.current = setInterval(step, 800);
+      return () => { if (timerRef.current) clearInterval(timerRef.current); };
+    }
+  }, [autoPlay, isDone, step]);
+
+  const avgTat = (processes.reduce((sum, p) => sum + (p.tat || 0), 0) / processes.length).toFixed(2);
+  const avgWt = (processes.reduce((sum, p) => sum + (p.wt || 0), 0) / processes.length).toFixed(2);
+
+  return (
+    <div className="space-y-6">
+      {/* Top Controls */}
+      <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-xl bg-slate-900/60 border border-slate-800">
+        <div className="flex items-center gap-3">
+          <label className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Time Quantum (q):</label>
+          <div className="flex items-center gap-1">
+            {[1, 2, 3, 4].map(q => (
+              <button
+                key={q}
+                onClick={() => { setQuantum(q); reset(); }}
+                disabled={gantt.length > 0}
+                className={`px-3 py-1 rounded-lg text-xs font-bold font-mono transition-all border ${
+                  quantum === q
+                    ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300"
+                    : "bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600 disabled:opacity-40"
+                }`}
+              >
+                q = {q}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setAutoPlay(p => !p)}
+            disabled={isDone}
+            className={`px-4 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all border ${
+              autoPlay
+                ? "bg-amber-500/20 border-amber-500/50 text-amber-300"
+                : "bg-emerald-500/20 border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/30 disabled:opacity-50"
+            }`}
+          >
+            {autoPlay ? "Pause" : "Auto Play"}
+          </button>
+          <button
+            onClick={step}
+            disabled={isDone || autoPlay}
+            className="px-4 py-1.5 rounded-lg bg-indigo-500/20 border border-indigo-500/50 text-indigo-300 hover:bg-indigo-500/30 text-xs font-bold disabled:opacity-50"
+          >
+            Step ➔
+          </button>
+          <button
+            onClick={reset}
+            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs"
+            title="Reset"
+          >
+            <RotateCcw className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Ready Queue Display */}
+      <div className="glass-card p-5 border-emerald-500/20">
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-2">
+            <span>📥</span> Ready Queue (FIFO Order)
+          </span>
+          <span className="text-xs text-slate-400 font-mono">Current Time: <strong className="text-white">t = {time}</strong></span>
+        </div>
+
+        <div className="flex items-center gap-3 overflow-x-auto p-3 bg-slate-950/60 rounded-xl border border-slate-800 min-h-[70px]">
+          <span className="text-[10px] uppercase font-bold text-emerald-400 border border-emerald-500/30 px-2 py-1 rounded bg-emerald-500/10 shrink-0">
+            FRONT ➔
+          </span>
+
+          <AnimatePresence>
+            {readyQueue.length === 0 ? (
+              <span className="text-xs text-slate-500 italic">Queue is empty</span>
+            ) : (
+              readyQueue.map((pid, idx) => {
+                const p = processes.find(x => x.id === pid);
+                if (!p) return null;
+                return (
+                  <motion.div
+                    key={pid + "-" + idx}
+                    initial={{ opacity: 0, scale: 0.8, x: 20 }}
+                    animate={{ opacity: 1, scale: 1, x: 0 }}
+                    exit={{ opacity: 0, scale: 0.8, x: -20 }}
+                    className={`px-3 py-2 rounded-xl font-mono text-xs font-bold text-white shrink-0 border border-white/10 ${p.color} flex flex-col items-center justify-center min-w-[60px]`}
+                  >
+                    <span>{p.name}</span>
+                    <span className="text-[10px] text-white/80">rem: {p.rem}</span>
+                  </motion.div>
+                );
+              })
+            )}
+          </AnimatePresence>
+
+          <span className="text-[10px] uppercase font-bold text-slate-500 border border-slate-700 px-2 py-1 rounded bg-slate-800/40 shrink-0 ml-auto">
+            ➔ REAR
+          </span>
+        </div>
+      </div>
+
+      {/* Gantt Chart */}
+      <div className="glass-card p-5 border-indigo-500/20">
+        <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider block mb-3">
+          📊 Execution Timeline (Gantt Chart)
+        </span>
+
+        {gantt.length === 0 ? (
+          <div className="h-14 flex items-center justify-center text-xs text-slate-500 italic bg-slate-950/50 rounded-xl border border-slate-800">
+            Click &quot;Step&quot; or &quot;Auto Play&quot; to begin Round Robin scheduling
+          </div>
+        ) : (
+          <div className="overflow-x-auto pb-2">
+            <div className="flex items-center min-w-[500px]">
+              {gantt.map((slice, i) => (
+                <div key={i} className="flex flex-col items-center flex-1">
+                  <div
+                    className={`${slice.color} text-white font-mono text-xs font-bold h-12 flex items-center justify-center border-r border-slate-950 w-full transition-all`}
+                  >
+                    {slice.name}
+                  </div>
+                  <div className="flex justify-between w-full text-[10px] text-slate-400 font-mono mt-1 px-1">
+                    <span>{slice.start}</span>
+                    <span>{slice.end}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Process Table & Metrics */}
+      <div className="glass-card p-5 border-slate-800">
+        <span className="text-xs font-bold text-slate-300 uppercase tracking-wider block mb-3">
+          📋 Process Metrics Table
+        </span>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs text-left">
+            <thead>
+              <tr className="border-b border-slate-800 text-slate-400">
+                <th className="pb-2">Process</th>
+                <th className="pb-2">Arrival (AT)</th>
+                <th className="pb-2">Burst (BT)</th>
+                <th className="pb-2">Remaining</th>
+                <th className="pb-2">Completion (CT)</th>
+                <th className="pb-2 text-indigo-400">TAT (CT - AT)</th>
+                <th className="pb-2 text-emerald-400">WT (TAT - BT)</th>
+                <th className="pb-2">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/60 font-mono">
+              {processes.map(p => (
+                <tr key={p.id} className={p.id === running ? "bg-indigo-500/10 font-bold" : ""}>
+                  <td className="py-2.5 font-bold flex items-center gap-2">
+                    <span className={`w-2.5 h-2.5 rounded-full ${p.color}`} />
+                    {p.name}
+                  </td>
+                  <td className="py-2.5">{p.at}</td>
+                  <td className="py-2.5">{p.bt}</td>
+                  <td className="py-2.5">{p.rem}</td>
+                  <td className="py-2.5">{p.rem === 0 ? p.ct : "—"}</td>
+                  <td className="py-2.5 text-indigo-300">{p.rem === 0 ? p.tat : "—"}</td>
+                  <td className="py-2.5 text-emerald-300">{p.rem === 0 ? p.wt : "—"}</td>
+                  <td className="py-2.5">
+                    {p.rem === 0 ? (
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300">Done</span>
+                    ) : p.id === running ? (
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 animate-pulse">Running</span>
+                    ) : (
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400">Waiting</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Averages */}
+        <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-800">
+          <div className="p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-center">
+            <div className="text-xs text-indigo-300 font-semibold mb-1">Average Turnaround Time</div>
+            <div className="text-xl font-mono font-bold text-white">{avgTat} units</div>
+            <div className="text-[10px] text-slate-400 mt-0.5">Sum(TAT) / {processes.length}</div>
+          </div>
+          <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-center">
+            <div className="text-xs text-emerald-300 font-semibold mb-1">Average Waiting Time</div>
+            <div className="text-xl font-mono font-bold text-white">{avgWt} units</div>
+            <div className="text-[10px] text-slate-400 mt-0.5">Sum(WT) / {processes.length}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // MAIN PAGE
 // ═══════════════════════════════════════════════════════════════════════════
@@ -826,26 +1200,37 @@ export default function QueueVisualizerPage() {
   const [activeTab, setActiveTab] = useState<Tab>("linear");
   const [showCode, setShowCode] = useState(false);
   const [showTips, setShowTips] = useState(false);
-  const { addXP } = useProgressStore();
+  const { addXP, updateTopicMastery, recordStudySession } = useProgressStore();
+
+  useEffect(() => {
+    const start = Date.now();
+    return () => {
+      const mins = Math.round((Date.now() - start) / 60000);
+      if (mins >= 1) recordStudySession(mins);
+    };
+  }, [recordStudySession]);
 
   const tabs: { id: Tab; label: string; desc: string; color: string }[] = [
-    { id: "linear",   label: "Linear Queue",   desc: "FIFO with front/rear", color: "indigo" },
-    { id: "circular", label: "Circular Queue",  desc: "(rear+1)%MAX",         color: "purple" },
-    { id: "priority", label: "Priority Queue",  desc: "Min-heap ordering",    color: "red"    },
-    { id: "deque",    label: "Deque",           desc: "Double-ended",         color: "cyan"   },
+    { id: "linear",     label: "Linear Queue",     desc: "FIFO with front/rear",   color: "indigo"  },
+    { id: "circular",   label: "Circular Queue",    desc: "(rear+1)%MAX",           color: "purple"  },
+    { id: "priority",   label: "Priority Queue",    desc: "Min-heap ordering",      color: "red"     },
+    { id: "deque",      label: "Deque",             desc: "Double-ended",           color: "cyan"    },
+    { id: "scheduling", label: "Round Robin",       desc: "CPU Scheduling FIFO",    color: "emerald" },
   ];
 
   const colorMap: Record<string, string> = {
-    indigo: "border-indigo-500 bg-indigo-500/15 text-indigo-300",
-    purple: "border-purple-500 bg-purple-500/15 text-purple-300",
-    red:    "border-red-500 bg-red-500/15 text-red-300",
-    cyan:   "border-cyan-500 bg-cyan-500/15 text-cyan-300",
+    indigo:  "border-indigo-500 bg-indigo-500/15 text-indigo-300",
+    purple:  "border-purple-500 bg-purple-500/15 text-purple-300",
+    red:     "border-red-500 bg-red-500/15 text-red-300",
+    cyan:    "border-cyan-500 bg-cyan-500/15 text-cyan-300",
+    emerald: "border-emerald-500 bg-emerald-500/15 text-emerald-300",
   };
   const activeColorMap: Record<string, string> = {
-    indigo: "border-indigo-400 bg-indigo-500/30 text-indigo-200",
-    purple: "border-purple-400 bg-purple-500/30 text-purple-200",
-    red:    "border-red-400 bg-red-500/30 text-red-200",
-    cyan:   "border-cyan-400 bg-cyan-500/30 text-cyan-200",
+    indigo:  "border-indigo-400 bg-indigo-500/30 text-indigo-200",
+    purple:  "border-purple-400 bg-purple-500/30 text-purple-200",
+    red:     "border-red-400 bg-red-500/30 text-red-200",
+    cyan:    "border-cyan-400 bg-cyan-500/30 text-cyan-200",
+    emerald: "border-emerald-400 bg-emerald-500/30 text-emerald-200",
   };
 
   return (
@@ -858,7 +1243,7 @@ export default function QueueVisualizerPage() {
           </div>
           <div>
             <h1 className="text-2xl md:text-3xl font-bold gradient-text">Queue Visualization Suite</h1>
-            <p className="text-slate-400 text-sm">Interactive queue simulations — Linear, Circular, Priority & Deque</p>
+            <p className="text-slate-400 text-sm">Interactive queue simulations — Linear, Circular, Priority, Deque & Round Robin Scheduling</p>
           </div>
         </div>
       </motion.div>
@@ -887,10 +1272,11 @@ export default function QueueVisualizerPage() {
               exit={{ opacity: 0, y: -15 }}
               transition={{ duration: 0.25 }}
             >
-              {activeTab === "linear"   && <LinearQueue   addXP={addXP} />}
-              {activeTab === "circular" && <CircularQueue addXP={addXP} />}
-              {activeTab === "priority" && <PriorityQueue addXP={addXP} />}
-              {activeTab === "deque"    && <Deque         addXP={addXP} />}
+              {activeTab === "linear"     && <LinearQueue         addXP={addXP} />}
+              {activeTab === "circular"   && <CircularQueue       addXP={addXP} />}
+              {activeTab === "priority"   && <PriorityQueue       addXP={addXP} />}
+              {activeTab === "deque"      && <Deque               addXP={addXP} />}
+              {activeTab === "scheduling" && <RoundRobinScheduler addXP={addXP} updateTopicMastery={updateTopicMastery} />}
             </motion.div>
           </AnimatePresence>
         </div>

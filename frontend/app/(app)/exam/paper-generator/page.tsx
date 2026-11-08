@@ -396,6 +396,12 @@ Generate REAL DSA questions from: ${unitLabel}`;
               >
                 <Download className="w-4 h-4" /> Download
               </button>
+              <button
+                onClick={() => window.print()}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-500/20 border border-purple-500/40 text-purple-300 text-sm font-medium hover:bg-purple-500/30 transition-all"
+              >
+                <Printer className="w-4 h-4" /> Print / PDF
+              </button>
             </div>
           )}
         </motion.div>
@@ -554,6 +560,7 @@ Generate REAL DSA questions from: ${unitLabel}`;
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 ref={printRef}
+                id="printable-paper"
                 className="glass-card overflow-hidden"
               >
                 {/* Paper Header */}
@@ -654,6 +661,30 @@ Generate REAL DSA questions from: ${unitLabel}`;
           </div>
         </div>
       </div>
+
+      <style jsx global>{`
+        @media print {
+          body * {
+            visibility: hidden;
+          }
+          #printable-paper,
+          #printable-paper * {
+            visibility: visible;
+            color: #000 !important;
+            background: #fff !important;
+            border-color: #ccc !important;
+          }
+          #printable-paper {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            margin: 0;
+            padding: 24px;
+            box-shadow: none !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

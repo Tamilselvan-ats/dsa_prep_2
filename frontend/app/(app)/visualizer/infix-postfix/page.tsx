@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Play, StepForward, RotateCcw, ChevronRight, AlertTriangle, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -99,7 +99,17 @@ export default function InfixPostfixPage() {
   const [evalResult, setEvalResult] = useState<number | null>(null);
   const [evalError, setEvalError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"convert" | "evaluate">("convert");
-  const { addXP } = useProgressStore();
+  const { addXP, updateTopicMastery, recordStudySession } = useProgressStore();
+  const masteryUpdated = useRef(false);
+
+  // Track study time
+  useEffect(() => {
+    const start = Date.now();
+    return () => {
+      const mins = Math.round((Date.now() - start) / 60000);
+      if (mins >= 1) recordStudySession(mins);
+    };
+  }, [recordStudySession]);
 
   const startConversion = () => {
     try {
@@ -107,6 +117,15 @@ export default function InfixPostfixPage() {
       setConvSteps(steps);
       setCurrentConvStep(-1);
       addXP(5);
+      if (!masteryUpdated.current) {
+        masteryUpdated.current = true;
+        updateTopicMastery("expressions", {
+          masteryScore: 15,
+          practiceScore: 10,
+          lastStudiedAt: new Date().toISOString(),
+          nextRevisionAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+        });
+      }
     } catch { toast.error("Invalid expression"); }
   };
 
@@ -125,6 +144,15 @@ export default function InfixPostfixPage() {
     setEvalResult(result);
     setEvalError(error || null);
     addXP(5);
+    if (!masteryUpdated.current) {
+      masteryUpdated.current = true;
+      updateTopicMastery("expressions", {
+        masteryScore: 15,
+        practiceScore: 10,
+        lastStudiedAt: new Date().toISOString(),
+        nextRevisionAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+      });
+    }
   };
 
   const stepEval = () => {

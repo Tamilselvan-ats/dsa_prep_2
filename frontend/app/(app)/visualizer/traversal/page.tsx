@@ -100,8 +100,18 @@ export default function TreeTraversalPage() {
   const [quizAnswer, setQuizAnswer] = useState("");
   const [quizResult, setQuizResult] = useState<null | "correct" | "wrong">(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const { addXP } = useProgressStore();
+  const { addXP, updateTopicMastery, recordStudySession } = useProgressStore();
+  const masteryUpdated = useRef(false);
   const [positions, setPositions] = useState<NodePos[]>([]);
+
+  // Track study time
+  useEffect(() => {
+    const start = Date.now();
+    return () => {
+      const mins = Math.round((Date.now() - start) / 60000);
+      if (mins >= 1) recordStudySession(mins);
+    };
+  }, [recordStudySession]);
 
   const buildTree = useCallback(() => {
     const vals = inputStr.split(",").map(v => v.trim() === "null" || v.trim() === "" ? null : Number(v.trim()));
@@ -123,6 +133,15 @@ export default function TreeTraversalPage() {
     setSteps(st);
     setCurrentStep(-1);
     addXP(5);
+    if (!masteryUpdated.current) {
+      masteryUpdated.current = true;
+      updateTopicMastery("tree-traversals", {
+        masteryScore: 15,
+        practiceScore: 10,
+        lastStudiedAt: new Date().toISOString(),
+        nextRevisionAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+      });
+    }
   };
 
   const stepFwd = useCallback(() => {
@@ -158,6 +177,12 @@ export default function TreeTraversalPage() {
     if (userAns === correct) {
       setQuizResult("correct");
       addXP(20);
+      updateTopicMastery("tree-traversals", {
+        masteryScore: 30,
+        practiceScore: 25,
+        lastStudiedAt: new Date().toISOString(),
+        nextRevisionAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+      });
       toast.success("🎉 Correct! +20 XP");
     } else {
       setQuizResult("wrong");

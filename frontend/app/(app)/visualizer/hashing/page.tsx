@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Hash, Calculator, Grid3x3, Layers, Scissors,
@@ -111,7 +111,7 @@ function DivisionMethod() {
   const [m, setM] = useState(7);
   const [inputKey, setInputKey] = useState("");
   const [entries, setEntries] = useState<HashEntry[]>([]);
-  const { addXP } = useProgressStore();
+  const { addXP, updateTopicMastery } = useProgressStore();
 
   const insert = () => {
     const k = parseInt(inputKey);
@@ -122,6 +122,12 @@ function DivisionMethod() {
     setEntries(prev => [...prev, { key: k, hashValue: hv, isCollision: isCol }]);
     setInputKey("");
     addXP(5);
+    updateTopicMastery("hashing", {
+      masteryScore: 20,
+      practiceScore: 15,
+      lastStudiedAt: new Date().toISOString(),
+      nextRevisionAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+    });
     toast.success(`h(${k}) = ${k} mod ${m} = ${hv}${isCol ? " ⚠ Collision!" : ""}`, { icon: "🔢" });
   };
 
@@ -670,6 +676,15 @@ function DigitExtractionMethod() {
 
 export default function HashingLabPage() {
   const [activeTab, setActiveTab] = useState<MethodTab>("division");
+  const { recordStudySession } = useProgressStore();
+
+  useEffect(() => {
+    const start = Date.now();
+    return () => {
+      const mins = Math.round((Date.now() - start) / 60000);
+      if (mins >= 1) recordStudySession(mins);
+    };
+  }, [recordStudySession]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 p-4 md:p-6">

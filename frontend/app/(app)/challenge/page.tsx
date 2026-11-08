@@ -190,7 +190,7 @@ function getLast7Days(): string[] {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function ChallengePage() {
-  const { progress, addXP, recordQuestionAttempt, updateStreak } = useProgressStore();
+  const { progress, addXP, recordQuestionAttempt, updateStreak, updateTopicMastery, recordStudySession } = useProgressStore();
   const { settings } = useAIStore();
 
   const [activeType, setActiveType] = useState<ChallengeType>("mcq");
@@ -273,6 +273,16 @@ export default function ChallengePage() {
     setIsCorrect(correct);
     setSubmitted(true);
     recordQuestionAttempt(correct);
+    recordStudySession(5);
+
+    const topicId = challenge.topic || "stack-adt";
+    const prevMastery = progress.topicMastery[topicId];
+    updateTopicMastery(topicId, {
+      practiceScore: Math.min(100, (prevMastery?.practiceScore || 0) + (correct ? 15 : 5)),
+      masteryScore: Math.min(100, (prevMastery?.masteryScore || 0) + (correct ? 10 : 2)),
+      lastStudiedAt: new Date().toISOString(),
+      nextRevisionAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+    });
 
     if (correct) {
       const xp = challenge.xpReward - hintsRevealed * 10;

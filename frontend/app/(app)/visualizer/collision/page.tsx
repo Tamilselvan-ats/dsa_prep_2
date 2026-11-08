@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, RotateCcw, Hash, Layers, Link, ChevronRight, AlertTriangle, Info } from "lucide-react";
 import { toast } from "sonner";
@@ -68,7 +68,17 @@ export default function CollisionLabPage() {
   const [chains, setChains] = useState<Record<number, number[]>>({});
   const [openTable, setOpenTable] = useState<(number | null)[]>(Array(7).fill(null));
   const [lastResult, setLastResult] = useState<InsertResult | null>(null);
-  const { addXP } = useProgressStore();
+  const { addXP, updateTopicMastery, recordStudySession } = useProgressStore();
+  const masteryUpdated = useRef(false);
+
+  // Track study time
+  useEffect(() => {
+    const start = Date.now();
+    return () => {
+      const mins = Math.round((Date.now() - start) / 60000);
+      if (mins >= 1) recordStudySession(mins);
+    };
+  }, [recordStudySession]);
 
   const reset = useCallback(() => {
     setKeys([]);
@@ -94,6 +104,15 @@ export default function CollisionLabPage() {
       setResults(r => [...r, result]);
       setKeys(k => [...k, key]);
       addXP(3);
+      if (!masteryUpdated.current) {
+        masteryUpdated.current = true;
+        updateTopicMastery("collision", {
+          masteryScore: 15,
+          practiceScore: 10,
+          lastStudiedAt: new Date().toISOString(),
+          nextRevisionAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+        });
+      }
       toast.success(`${key} → slot [${slot}]${newChains[slot].length > 1 ? " (collision → chained)" : ""}`);
     } else {
       const table = [...openTable];
@@ -109,10 +128,19 @@ export default function CollisionLabPage() {
       setResults(r => [...r, result]);
       setKeys(k => [...k, key]);
       addXP(3);
+      if (!masteryUpdated.current) {
+        masteryUpdated.current = true;
+        updateTopicMastery("collision", {
+          masteryScore: 15,
+          practiceScore: 10,
+          lastStudiedAt: new Date().toISOString(),
+          nextRevisionAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+        });
+      }
       toast.success(`${key} → slot [${result.finalSlot}]${result.collision ? " (collision resolved)" : ""}`);
     }
     setInputKey("");
-  }, [inputKey, method, tableSize, keys, chains, openTable, addXP]);
+  }, [inputKey, method, tableSize, keys, chains, openTable, addXP, updateTopicMastery]);
 
   const totalCollisions = results.filter(r => r.collision).length;
   const totalProbes = results.reduce((sum, r) => sum + r.steps.length, 0);

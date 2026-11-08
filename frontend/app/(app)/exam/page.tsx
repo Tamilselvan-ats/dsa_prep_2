@@ -81,7 +81,7 @@ export default function ExamPage() {
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { settings } = useAIStore();
-  const { addXP, recordQuestionAttempt } = useProgressStore();
+  const { addXP, recordQuestionAttempt, updateTopicMastery, recordStudySession } = useProgressStore();
 
   const pattern = PATTERNS.find(p => p.id === selectedPattern) || PATTERNS[0];
 
@@ -175,8 +175,23 @@ export default function ExamPage() {
     setEvaluating(false);
     setStatus("results");
     addXP(50 + total * 2);
+
+    const timeSpentMins = Math.max(1, Math.round((timeLimitMin * 60 - timeLeft) / 60));
+    recordStudySession(timeSpentMins);
+
+    const pct = maxScore > 0 ? Math.round((total / maxScore) * 100) : 0;
+    const targetTopics = selectedUnit === "unit3" ? DSA_TOPICS.unit3 : selectedUnit === "unit4" ? DSA_TOPICS.unit4 : [...DSA_TOPICS.unit3, ...DSA_TOPICS.unit4];
+    targetTopics.forEach(t => {
+      updateTopicMastery(t.id, {
+        mockTestScore: pct,
+        masteryScore: pct,
+        lastStudiedAt: new Date().toISOString(),
+        nextRevisionAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+      });
+    });
+
     toast.success(`Exam complete! Score: ${total}/${maxScore}`);
-  }, [questions, answers, maxScore, addXP, recordQuestionAttempt]);
+  }, [questions, answers, maxScore, timeLimitMin, timeLeft, selectedUnit, addXP, recordQuestionAttempt, recordStudySession, updateTopicMastery]);
 
   const formatTime = (secs: number) => `${String(Math.floor(secs / 60)).padStart(2, "0")}:${String(secs % 60).padStart(2, "0")}`;
   const q = questions[currentQ];

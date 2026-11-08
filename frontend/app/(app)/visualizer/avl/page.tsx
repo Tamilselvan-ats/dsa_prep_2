@@ -357,7 +357,17 @@ const ROTATION_DETAILS: Record<string, { title: string; condition: string; steps
 };
 
 export default function AVLVisualizerPage() {
-  const { addXP } = useProgressStore();
+  const { addXP, updateTopicMastery, recordStudySession } = useProgressStore();
+  const masteryUpdated = useRef(false);
+
+  // Track study time
+  useEffect(() => {
+    const start = Date.now();
+    return () => {
+      const mins = Math.round((Date.now() - start) / 60000);
+      if (mins >= 1) recordStudySession(mins);
+    };
+  }, [recordStudySession]);
 
   // Tree state
   const [nodes, setNodes] = useState<Record<number, AVLNode>>({});
@@ -445,8 +455,17 @@ export default function AVLVisualizerPage() {
 
     setTimeout(() => setHighlightedNode(null), 2000);
     addXP(10);
+    if (!masteryUpdated.current) {
+      masteryUpdated.current = true;
+      updateTopicMastery("avl-tree", {
+        masteryScore: 20,
+        practiceScore: 15,
+        lastStudiedAt: new Date().toISOString(),
+        nextRevisionAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+      });
+    }
     setInsertVal("");
-  }, [insertVal, nodes, root, addLog, addXP]);
+  }, [insertVal, nodes, root, addLog, addXP, updateTopicMastery]);
 
   const handleDelete = useCallback(() => {
     const raw = deleteVal.trim();

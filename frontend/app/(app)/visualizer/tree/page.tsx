@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   TreePine, Plus, Trash2, Info, ChevronRight, Zap,
@@ -268,8 +268,17 @@ function buildTerms(): TermExplanation[] {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function TreeLabPage() {
-  const { addXP, updateTopicMastery } = useProgressStore();
+  const { addXP, updateTopicMastery, recordStudySession } = useProgressStore();
   const [nodes, setNodes] = useState<TreeNode[]>(buildDefaultTree());
+
+  // Track study time
+  useEffect(() => {
+    const start = Date.now();
+    return () => {
+      const mins = Math.round((Date.now() - start) / 60000);
+      if (mins >= 1) recordStudySession(mins);
+    };
+  }, [recordStudySession]);
   const [selectedTermIdx, setSelectedTermIdx] = useState<number | null>(null);
   const [focusedNode, setFocusedNode] = useState<number | null>(null);
   const [addMode, setAddMode] = useState<"off" | "selectParent">("off");
@@ -441,6 +450,12 @@ export default function TreeLabPage() {
     if (idx === currentQuiz.correctIdx) {
       setQuizScore(s => s + 1);
       addXP(15, "tree-quiz-correct");
+      updateTopicMastery("tree-terminology", {
+        masteryScore: 40,
+        practiceScore: 35,
+        lastStudiedAt: new Date().toISOString(),
+        nextRevisionAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+      });
       toast.success("✅ Correct! +15 XP");
     } else {
       toast.error("❌ Incorrect. See the tree for the right answer.");

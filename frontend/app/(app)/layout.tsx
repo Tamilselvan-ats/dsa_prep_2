@@ -8,10 +8,11 @@ import {
   Brain, LayoutDashboard, Layers, GitBranch, TreePine, Hash,
   BookOpen, Target, BarChart3, Trophy, Zap, Settings, Menu, X,
   Code, Cpu, GraduationCap, FlaskConical, Star, ChevronDown,
-  Flame, Shield, Calendar, User
+  Flame, Shield, Calendar, User, Clock
 } from "lucide-react";
 import { useProgressStore } from "@/lib/stores/progress-store";
 import { RANK_INFO } from "@/lib/constants";
+import { syncProgress } from "@/lib/api";
 
 const NAV_ITEMS = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard", color: "text-indigo-400" },
@@ -79,11 +80,22 @@ const NAV_ITEMS = [
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const [sessionMins, setSessionMins] = useState(0);
   const pathname = usePathname();
-  const { progress, updateStreak } = useProgressStore();
+  const { progress, updateStreak, recordStudySession } = useProgressStore();
 
   useEffect(() => {
     updateStreak();
+    // Non-blocking sync to backend
+    syncProgress("local-user", progress).catch(() => {});
+
+    // Live study timer: auto-records 1 minute every 60 seconds
+    const interval = setInterval(() => {
+      setSessionMins(m => m + 1);
+      recordStudySession(1);
+    }, 60000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const rankInfo = RANK_INFO[progress.rank];
@@ -241,6 +253,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </button>
           <div className="flex-1" />
           <div className="flex items-center gap-4">
+            <div className="hidden md:flex items-center gap-2 glass-card px-3 py-1.5 text-xs text-teal-400">
+              <Clock className="w-3.5 h-3.5 animate-pulse" />
+              <span>{sessionMins}m active ({progress.studyMinutes}m total)</span>
+            </div>
             <div className="hidden sm:flex items-center gap-2 glass-card px-3 py-1.5">
               <Flame className="w-4 h-4 text-orange-400" />
               <span className="text-sm font-bold text-orange-400">{progress.streak} day streak</span>

@@ -48,7 +48,17 @@ export default function RecursionVisualizerPage() {
   const [activeTab, setActiveTab] = useState<"hanoi" | "callstack" | "fibonacci">("hanoi");
   const [fibN, setFibN] = useState(5);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const { addXP } = useProgressStore();
+  const { addXP, updateTopicMastery, recordStudySession } = useProgressStore();
+  const masteryUpdated = useRef(false);
+
+  // Track study time
+  useEffect(() => {
+    const start = Date.now();
+    return () => {
+      const mins = Math.round((Date.now() - start) / 60000);
+      if (mins >= 1) recordStudySession(mins);
+    };
+  }, [recordStudySession]);
 
   const initHanoi = useCallback((n: number) => {
     const disks: Disk[] = Array.from({ length: n }, (_, i) => ({ id: i + 1, size: n - i }));
@@ -73,16 +83,34 @@ export default function RecursionVisualizerPage() {
   }, []);
 
   const stepForward = useCallback(() => {
+    if (!masteryUpdated.current) {
+      masteryUpdated.current = true;
+      updateTopicMastery("recursion", {
+        masteryScore: 15,
+        practiceScore: 10,
+        lastStudiedAt: new Date().toISOString(),
+        nextRevisionAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+      });
+    }
     setCurrentMoveIdx(prev => {
       const next = prev + 1;
       if (next >= moves.length) { setIsPlaying(false); return prev; }
       setPoles(p => applyMove(next, p, moves));
       return next;
     });
-  }, [moves, applyMove]);
+  }, [moves, applyMove, updateTopicMastery]);
 
   const togglePlay = () => {
     if (currentMoveIdx >= moves.length - 1) { initHanoi(diskCount); return; }
+    if (!masteryUpdated.current) {
+      masteryUpdated.current = true;
+      updateTopicMastery("recursion", {
+        masteryScore: 15,
+        practiceScore: 10,
+        lastStudiedAt: new Date().toISOString(),
+        nextRevisionAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+      });
+    }
     setIsPlaying(p => !p);
     addXP(5);
   };

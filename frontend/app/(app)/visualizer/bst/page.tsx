@@ -235,7 +235,17 @@ function buildDefaultTree(): BSTNode {
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export default function BSTPage() {
-  const { addXP } = useProgressStore();
+  const { addXP, updateTopicMastery, recordStudySession } = useProgressStore();
+  const masteryUpdated = useRef(false);
+
+  // Track study time
+  useEffect(() => {
+    const start = Date.now();
+    return () => {
+      const mins = Math.round((Date.now() - start) / 60000);
+      if (mins >= 1) recordStudySession(mins);
+    };
+  }, [recordStudySession]);
 
   const [root, setRoot] = useState<BSTNode | null>(() => buildDefaultTree());
   const [inputVal, setInputVal] = useState("");
@@ -298,6 +308,15 @@ export default function BSTPage() {
     setRoot(newRoot);
     addLog(`✓ Inserted ${val}`, "result");
     addXP(5, "BST Insert");
+    if (!masteryUpdated.current) {
+      masteryUpdated.current = true;
+      updateTopicMastery("bst", {
+        masteryScore: 15,
+        practiceScore: 10,
+        lastStudiedAt: new Date().toISOString(),
+        nextRevisionAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+      });
+    }
     toast.success(`Inserted ${val}`);
     setInputVal("");
     await sleep(1500);

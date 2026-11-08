@@ -22,7 +22,7 @@ type QuizState = "idle" | "loading" | "quiz" | "results";
 
 export default function MCQPage() {
   const { settings } = useAIStore();
-  const { addXP, updateTopicMastery } = useProgressStore();
+  const { progress, addXP, updateTopicMastery, recordQuestionAttempt, recordStudySession } = useProgressStore();
 
   const [selectedTopic, setSelectedTopic] = useState(ALL_TOPICS[0].id);
   const [difficulty, setDifficulty] = useState("medium");
@@ -163,6 +163,7 @@ export default function MCQPage() {
     const correct = idx === current.correctIndex;
     const newAnswered = [...answered, { idx: currentIdx, correct }];
     setAnswered(newAnswered);
+    recordQuestionAttempt(correct);
     if (correct) {
       addXP(5, "MCQ Correct");
       toast.success("+5 XP! 🎯");
@@ -179,6 +180,15 @@ export default function MCQPage() {
       setSelected(null);
       setShowExplanation(false);
     } else {
+      const pct = Math.round((score / mcqs.length) * 100);
+      const prevMastery = progress.topicMastery[selectedTopic]?.masteryScore || 0;
+      updateTopicMastery(selectedTopic, {
+        practiceScore: pct,
+        masteryScore: Math.min(100, Math.max(prevMastery, pct)),
+        lastStudiedAt: new Date().toISOString(),
+        nextRevisionAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+      });
+      recordStudySession(Math.max(1, Math.round(mcqs.length * 0.75)));
       setState("results");
     }
   };
@@ -215,7 +225,22 @@ export default function MCQPage() {
             </div>
 
             <div>
-              <label className="text-sm font-medium text-slate-300 mb-2 block">Difficulty</label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium text-slate-300">Difficulty</label>
+                {(() => {
+                  const m = progress.topicMastery[selectedTopic]?.masteryScore || 0;
+                  const rec = m >= 75 ? "hard" : m >= 40 ? "medium" : "easy";
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => setDifficulty(rec)}
+                      className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-medium bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20"
+                    >
+                      <span>⚡ AI Auto-Adapted: {rec.toUpperCase()}</span>
+                    </button>
+                  );
+                })()}
+              </div>
               <div className="flex gap-2 flex-wrap">
                 {DIFFICULTY_LEVELS.map(d => (
                   <button key={d.value} onClick={() => setDifficulty(d.value)}
